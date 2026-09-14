@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\TimeSlotController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('resources/{resource}', [ResourceController::class, 'show'])->name('resources.show');
     Route::get('resources/{resource}/time-slots', [TimeSlotController::class, 'index'])->name('resources.time-slots.index');
     Route::get('time-slots/{time_slot}', [TimeSlotController::class, 'show'])->name('time-slots.show');
+
+    Route::get('bookings', [BookingController::class, 'index'])->name('bookings.index');
+    Route::post('bookings', [BookingController::class, 'store'])->middleware('throttle:booking')->name('bookings.store');
+    Route::delete('bookings/{booking}', [BookingController::class, 'destroy'])->name('bookings.destroy');
 
     Route::middleware('admin')->group(function () {
         Route::post('resources', [ResourceController::class, 'store'])->name('resources.store');
