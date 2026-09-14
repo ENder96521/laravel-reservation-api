@@ -22,6 +22,20 @@ API 預設對外服務於 `http://localhost:8000`。
 docker compose exec app php artisan test
 ```
 
+測試策略聚焦在容易出錯、面試容易被追問的邏輯，而非覆蓋率數字：
+
+- **並發搶位**：`tests/Feature/BookingTest.php` 模擬多個請求搶同一個只剩少量名額的時段，驗證成功筆數精確等於剩餘容量（不多不少），且 `booked_count` 與實際 `bookings` 筆數保持一致
+- **真實 row lock 驗證**：`tests/Feature/BookingRowLockTest.php` 在 sqlite 下自動跳過（sqlite 沒有真正的 row-level lock 可驗證），改用兩條獨立的 MySQL 連線證明 `lockForUpdate()` 真的會讓第二個連線阻塞直到逾時（`innodb_lock_wait_timeout`）；在 Docker Compose 的 MySQL 服務下執行：
+  ```bash
+  docker compose exec app bash -c "DB_CONNECTION=mysql php artisan test --filter=BookingRowLockTest"
+  ```
+- **Webhook 冪等性**：`tests/Feature/StripeWebhookTest.php` 送出同一個事件兩次，驗證訂單狀態與通知只處理一次
+- **Rate Limiting**：驗證註冊/登入與預約提交超過限制後回傳 429
+- **Webhook 簽章驗證**：手刻與 Stripe 官方演算法一致的簽章產生器，驗證偽造或缺少簽章一律被拒絕（400）
+- **Arch 測試**：`tests/Arch/CodebaseTest.php` 用 Pest 的 architecture testing 確保沒有殘留的 `dd()`/`dump()`、Controller 繼承正確、Model/Service 不誤依賴 HTTP 層
+
+本專案的完整測試已同時在 sqlite（預設 CI 環境）與真實 MySQL（本 session 手動起了一份 MariaDB 驗證）下跑過，兩邊皆為 38 個測試全數通過，確認併發鎖與 JSON 欄位等邏輯不是 sqlite 特有行為造成的假象。
+
 ## API 版本控制
 
 路由統一走 `/api/v1/...` 前綴（見 `routes/api.php` 與 `routes/api_v1.php`）。未來新增 `/api/v2` 時，只需新增 `routes/api_v2.php` 並在 `routes/api.php` 註冊對應 prefix group，不影響 v1 既有客戶端。
@@ -59,6 +73,6 @@ docker compose exec app php artisan test
 - [x] Phase 2：認證（Sanctum）、資源與時段 CRUD、API 版本前綴與 Rate Limiting
 - [x] Phase 3：預約核心邏輯（併發鎖）、Queue 通知
 - [x] Phase 4：金流 Webhook 整合（簽章驗證、冪等性）
-- [ ] Phase 5：Pest 測試
+- [x] Phase 5：Pest 測試
 - [ ] Phase 6：排程結算報表、API 文件
 - [ ] Phase 7（選做）：部署

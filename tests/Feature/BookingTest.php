@@ -69,6 +69,21 @@ test('the last seat on a time slot is only granted to one of two competing reque
     expect(Booking::count())->toBe(1);
 });
 
+test('exactly capacity requests succeed out of a larger burst for the same slot', function () {
+    $resource = Resource::factory()->create();
+    $timeSlot = TimeSlot::factory()->for($resource)->create(['capacity' => 3, 'booked_count' => 0]);
+    $users = User::factory()->count(7)->create();
+
+    $results = $users->map(
+        fn (User $user) => $this->actingAs($user)->postJson('/api/v1/bookings', ['time_slot_id' => $timeSlot->id])->status()
+    );
+
+    expect($results->filter(fn ($status) => $status === 201)->count())->toBe(3);
+    expect($results->filter(fn ($status) => $status === 409)->count())->toBe(4);
+    expect($timeSlot->fresh()->booked_count)->toBe(3);
+    expect(Booking::count())->toBe(3);
+});
+
 test('resubmitting the same idempotency key returns the original booking instead of creating a new one', function () {
     $resource = Resource::factory()->create();
     $timeSlot = TimeSlot::factory()->for($resource)->create(['capacity' => 5, 'booked_count' => 0]);
