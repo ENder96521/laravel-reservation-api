@@ -67,6 +67,26 @@ docker compose exec app php artisan test
 - 若付款完成時該筆預約已被使用者取消，只記錄款項已收到（`payment_status=paid`），不會復原已取消的預約狀態；退款流程視為後續手動處理，不在本階段範圍內
 - 金流串接使用 Stripe **測試環境**金鑰（`sk_test_`/`whsec_test_` 前綴），`.env.example` 中相關欄位皆為空值
 
+## 每日結算報表（Scheduler）
+
+- `php artisan report:daily {date?}`：統計指定日期（預設為昨天）每個 resource 的預約數（total / confirmed / pending / cancelled / payment_failed）與已付款金額，輸出 CSV 到 `storage/app/reports/daily-{date}.csv`
+- 已在 `routes/console.php` 註冊 `Schedule::command('report:daily')->dailyAt('00:10')`；Docker Compose 新增了 `scheduler` service（`php artisan schedule:work`）負責觸發排程，與 `queue` worker 分離成獨立 process
+- 手動測試：
+  ```bash
+  docker compose exec app php artisan report:daily 2026-09-14
+  docker compose exec app cat storage/app/reports/daily-2026-09-14.csv
+  ```
+
+## API 文件（Scribe）
+
+- 已產生為靜態頁面於 `public/docs/`（`index.html` + `openapi.yaml` + `collection.json`），不需額外 Laravel route 或啟動時重新產生即可瀏覽：啟動服務後開啟 `http://localhost:8000/docs`
+- API 有變更時重新產生：
+  ```bash
+  docker compose exec app php artisan scribe:generate
+  ```
+- 認證方式為 Bearer token（Sanctum），未登入即可呼叫的端點（`register`/`login`/Stripe webhook）已個別標註 `@unauthenticated`
+- 每個 Controller 皆有 `@group` 分組與範例 `@response`（包含 201/400/403/409/429 等常見情境），body 參數則由各 FormRequest 的驗證規則自動萃取
+
 ## 目前進度
 
 - [x] Phase 1：專案初始化、Docker Compose 環境、`users` / `resources` / `time_slots` 資料表遷移
@@ -74,5 +94,5 @@ docker compose exec app php artisan test
 - [x] Phase 3：預約核心邏輯（併發鎖）、Queue 通知
 - [x] Phase 4：金流 Webhook 整合（簽章驗證、冪等性）
 - [x] Phase 5：Pest 測試
-- [ ] Phase 6：排程結算報表、API 文件
+- [x] Phase 6：排程結算報表、API 文件
 - [ ] Phase 7（選做）：部署

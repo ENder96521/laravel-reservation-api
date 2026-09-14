@@ -1,0 +1,56 @@
+name: 'Payment Webhooks'
+description: |-
+
+  Called directly by Stripe, not by API clients. Authenticated by verifying
+  the `Stripe-Signature` header rather than a Sanctum token.
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: api/v1/webhooks/stripe
+    metadata:
+      custom: []
+      groupName: 'Payment Webhooks'
+      groupDescription: |-
+
+        Called directly by Stripe, not by API clients. Authenticated by verifying
+        the `Stripe-Signature` header rather than a Sanctum token.
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Stripe webhook'
+      description: |-
+        Handles `checkout.session.completed` (confirms the booking's payment)
+        and `checkout.session.async_payment_failed` / `.expired` (marks the
+        booking as payment_failed). Idempotent: redelivering the same event id
+        is a no-op.
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: '{"received": true}'
+        headers: []
+        description: ''
+      -
+        custom: []
+        status: 400
+        content: '{"message": "Invalid payload or signature."}'
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null

@@ -16,10 +16,29 @@ use Stripe\Exception\SignatureVerificationException;
 use Stripe\Webhook;
 use UnexpectedValueException;
 
+/**
+ * @group Payment Webhooks
+ *
+ * Called directly by Stripe, not by API clients. Authenticated by verifying
+ * the `Stripe-Signature` header rather than a Sanctum token.
+ */
 class StripeWebhookController extends Controller
 {
     public function __construct(private readonly BookingService $bookings) {}
 
+    /**
+     * Stripe webhook
+     *
+     * Handles `checkout.session.completed` (confirms the booking's payment)
+     * and `checkout.session.async_payment_failed` / `.expired` (marks the
+     * booking as payment_failed). Idempotent: redelivering the same event id
+     * is a no-op.
+     *
+     * @unauthenticated
+     *
+     * @response 200 {"received": true}
+     * @response 400 {"message": "Invalid payload or signature."}
+     */
     public function handle(Request $request): JsonResponse
     {
         try {
