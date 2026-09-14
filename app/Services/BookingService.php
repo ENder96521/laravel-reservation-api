@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\PaymentGateway;
 use App\Exceptions\TimeSlotFullException;
 use App\Jobs\SendBookingNotification;
 use App\Models\Booking;
@@ -9,9 +10,13 @@ use App\Models\TimeSlot;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class BookingService
 {
+    public function __construct(private readonly PaymentGateway $paymentGateway) {}
+
     /**
      * Reserve a seat on a time slot for a user.
      *
@@ -49,7 +54,13 @@ class BookingService
                     'idempotency_key' => $idempotencyKey,
                 ]);
 
-                DB::afterCommit(fn () => SendBookingNotification::dispatch($booking, 'booking_confirmed'));
+                DB::afterCommit(function () use ($booking, $needsPayment) {
+                    if ($needsPayment) {
+                        $this->attachPaymentLink($booking);
+                    }
+
+                    SendBookingNotification::dispatch($booking, $needsPayment ? 'booking_pending_payment' : 'booking_confirmed');
+                });
 
                 return $booking;
             });
@@ -81,10 +92,73 @@ class BookingService
         });
     }
 
+    /**
+     * Mark a booking's payment as confirmed by a payment-webhook event.
+     * Idempotent: a booking already marked paid is left untouched, so a
+     * duplicate webhook delivery never re-triggers the confirmation notice.
+     */
+    public function confirmPayment(Booking $booking): void
+    {
+        DB::transaction(function () use ($booking) {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->payment_status === 'paid') {
+                return;
+            }
+
+            // If the booking was cancelled before payment arrived, record that the
+            // funds were received without resurrecting the cancelled reservation;
+            // reconciling/refunding that case is a manual, out-of-scope operation.
+            $locked->update([
+                'payment_status' => 'paid',
+                'status' => $locked->status === 'cancelled' ? 'cancelled' : 'confirmed',
+            ]);
+
+            DB::afterCommit(fn () => SendBookingNotification::dispatch($locked, 'booking_payment_confirmed'));
+        });
+    }
+
+    /**
+     * Mark a booking's payment as failed by a payment-webhook event.
+     * Idempotent: a no-op once the booking is already cancelled or confirmed.
+     */
+    public function failPayment(Booking $booking): void
+    {
+        DB::transaction(function () use ($booking) {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            if (in_array($locked->status, ['cancelled', 'confirmed'], true)) {
+                return;
+            }
+
+            $locked->update(['status' => 'payment_failed']);
+
+            DB::afterCommit(fn () => SendBookingNotification::dispatch($locked, 'booking_payment_failed'));
+        });
+    }
+
     private function findByIdempotencyKey(User $user, string $idempotencyKey): ?Booking
     {
         return Booking::where('user_id', $user->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
+    }
+
+    /**
+     * Runs outside the seat-locking transaction so a slow/failed call to the
+     * payment gateway never holds the time slot row lock open. A failure here
+     * is logged rather than thrown: the reservation itself already succeeded.
+     */
+    private function attachPaymentLink(Booking $booking): void
+    {
+        try {
+            $paymentUrl = $this->paymentGateway->createCheckoutSession($booking);
+            $booking->update(['payment_url' => $paymentUrl]);
+        } catch (Throwable $exception) {
+            Log::error('Failed to create payment checkout session', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 }

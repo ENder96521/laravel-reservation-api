@@ -39,6 +39,9 @@ class SendBookingNotification implements ShouldQueue
     {
         return match ($this->event) {
             'booking_confirmed' => "您的預約已確認（Booking #{$this->booking->id}）",
+            'booking_pending_payment' => "您的預約已建立，待付款（Booking #{$this->booking->id}）。付款連結：{$this->booking->payment_url}",
+            'booking_payment_confirmed' => "您的付款已確認，預約成立（Booking #{$this->booking->id}）",
+            'booking_payment_failed' => "您的付款失敗，請重新嘗試付款（Booking #{$this->booking->id}）",
             'booking_cancelled' => "您的預約已取消（Booking #{$this->booking->id}）",
             default => "Booking #{$this->booking->id}: {$this->event}",
         };

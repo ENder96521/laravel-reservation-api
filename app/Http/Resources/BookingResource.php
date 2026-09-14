@@ -18,6 +18,7 @@ class BookingResource extends JsonResource
             'time_slot_id' => $this->time_slot_id,
             'status' => $this->status,
             'payment_status' => $this->payment_status,
+            'payment_url' => $this->payment_url,
             'time_slot' => new TimeSlotResource($this->whenLoaded('timeSlot')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

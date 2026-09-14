@@ -35,6 +35,9 @@ test('booking a resource that requires payment starts as pending and unpaid', fu
     $response->assertCreated()
         ->assertJsonPath('data.status', 'pending')
         ->assertJsonPath('data.payment_status', 'unpaid');
+
+    expect($response->json('data.payment_url'))->not->toBeNull();
+    expect(NotificationLog::where('event', 'booking_pending_payment')->count())->toBe(1);
 });
 
 test('a full time slot cannot be booked', function () {

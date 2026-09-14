@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'time_slot_id', 'status', 'payment_status', 'idempotency_key'])]
+#[Fillable(['user_id', 'time_slot_id', 'status', 'payment_status', 'payment_url', 'idempotency_key'])]
 class Booking extends Model
 {
     /** @use HasFactory<BookingFactory> */

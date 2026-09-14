@@ -41,12 +41,24 @@ docker compose exec app php artisan test
 - `DELETE /api/v1/bookings/{booking}`：取消預約並釋放名額（本人或 admin 可操作，重複取消不會重複釋放名額）
 - 預約成功／取消後，透過 Queue Job（`SendBookingNotification`）非同步發送 LINE Notify 通知，並寫入 `notification_logs`；未設定 `LINE_NOTIFY_TOKEN` 時退回寫 log，不影響流程
 
+## 金流 Webhook（Stripe 測試環境）
+
+- 預約付費項目時（`resource.price > 0`），`BookingService` 會呼叫 `App\Contracts\PaymentGateway` 產生 Stripe Checkout Session，並把付款連結存回 `bookings.payment_url`。未設定 `STRIPE_SECRET` 時自動退回 `NullPaymentGateway`（回傳假連結），本地開發／測試不需要真的申請 Stripe 金鑰
+- `POST /api/v1/webhooks/stripe`：公開路由（不經 Sanctum），改用 `Stripe\Webhook::constructEvent()` 驗證 `Stripe-Signature` 標頭簽章，偽造簽章一律回 400（見 `tests/Feature/StripeWebhookTest.php`）
+- 冪等性採兩層防護：
+  1. `payment_webhook_logs` 對 `(provider, event_id)` 建唯一索引，同一事件重複送達會在 DB 層擋下第二次寫入
+  2. `BookingService::confirmPayment()` / `failPayment()` 本身也是冪等操作（已是 `paid` 就不再變動、也不會重複派發通知）
+  3. 業務邏輯與寫入 log 包在同一個 transaction 內；若寫入 log 因唯一索引衝突而失敗，整個 transaction（含付款狀態變更）會一起回滾，只回傳 200 acknowledge，不會重複扣款/通知
+- 支援事件：`checkout.session.completed`（確認付款，`status=confirmed`／`payment_status=paid`）、`checkout.session.async_payment_failed` / `checkout.session.expired`（標記 `status=payment_failed`）
+- 若付款完成時該筆預約已被使用者取消，只記錄款項已收到（`payment_status=paid`），不會復原已取消的預約狀態；退款流程視為後續手動處理，不在本階段範圍內
+- 金流串接使用 Stripe **測試環境**金鑰（`sk_test_`/`whsec_test_` 前綴），`.env.example` 中相關欄位皆為空值
+
 ## 目前進度
 
 - [x] Phase 1：專案初始化、Docker Compose 環境、`users` / `resources` / `time_slots` 資料表遷移
 - [x] Phase 2：認證（Sanctum）、資源與時段 CRUD、API 版本前綴與 Rate Limiting
 - [x] Phase 3：預約核心邏輯（併發鎖）、Queue 通知
-- [ ] Phase 4：金流 Webhook 整合（簽章驗證、冪等性）
+- [x] Phase 4：金流 Webhook 整合（簽章驗證、冪等性）
 - [ ] Phase 5：Pest 測試
 - [ ] Phase 6：排程結算報表、API 文件
 - [ ] Phase 7（選做）：部署
