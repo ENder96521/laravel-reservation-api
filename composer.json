@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "ender96521/laravel-reservation-api",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Online reservation system API: concurrency-safe booking, Stripe webhook idempotency, API versioning, and rate limiting.",
+    "keywords": ["laravel", "api", "reservation", "booking"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
