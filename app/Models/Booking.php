@@ -15,16 +15,25 @@ class Booking extends Model
     /** @use HasFactory<BookingFactory> */
     use HasFactory;
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * @return BelongsTo<TimeSlot, $this>
+     */
     public function timeSlot(): BelongsTo
     {
         return $this->belongsTo(TimeSlot::class);
     }
 
+    /**
+     * @return HasMany<NotificationLog, $this>
+     */
     public function notificationLogs(): HasMany
     {
         return $this->hasMany(NotificationLog::class);

@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @method static \Illuminate\Database\Eloquent\Builder<static> available()
+ */
 #[Fillable(['resource_id', 'start_at', 'end_at', 'capacity'])]
 class TimeSlot extends Model
 {
@@ -26,11 +29,17 @@ class TimeSlot extends Model
         ];
     }
 
+    /**
+     * @return BelongsTo<\App\Models\Resource, $this>
+     */
     public function resource(): BelongsTo
     {
         return $this->belongsTo(Resource::class);
     }
 
+    /**
+     * @return HasMany<Booking, $this>
+     */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
@@ -41,6 +50,10 @@ class TimeSlot extends Model
         return $this->booked_count >= $this->capacity;
     }
 
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
     public function scopeAvailable(Builder $query): Builder
     {
         return $query->whereColumn('booked_count', '<', 'capacity');

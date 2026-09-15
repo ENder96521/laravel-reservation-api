@@ -4,6 +4,7 @@ down
 events.scanned.php
 lsp-*.php
 maintenance.php
+phpstan/
 routes.php
 routes.scanned.php
 schedule-*

@@ -25,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
                 ? new StripeCheckoutGateway(new StripeClient($secret))
                 : new NullPaymentGateway;
         });
+
+        // Telescope is a dev-only dependency (not installed with --no-dev), so it must
+        // never be referenced outside this guard or production installs would fatal.
+        if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
+            $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
+            $this->app->register(TelescopeServiceProvider::class);
+        }
     }
 
     /**

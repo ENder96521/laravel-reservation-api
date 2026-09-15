@@ -17,6 +17,9 @@ class PaymentWebhookLog extends Model
         ];
     }
 
+    /**
+     * @return BelongsTo<Booking, $this>
+     */
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);

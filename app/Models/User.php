@@ -24,6 +24,9 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    /**
+     * @return HasMany<Booking, $this>
+     */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);

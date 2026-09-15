@@ -12,13 +12,16 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
         "predis/predis": "^3.6",
+        "sentry/sentry-laravel": "^4.27",
         "stripe/stripe-php": "^21.3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.12",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
+        "laravel/telescope": "^5.24",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "pestphp/pest": "^4.7",
@@ -54,6 +57,7 @@
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],
+        "analyse": "phpstan analyse --memory-limit=1G",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
