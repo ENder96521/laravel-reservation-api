@@ -22,6 +22,9 @@ class Resource extends Model
         ];
     }
 
+    /**
+     * @return HasMany<TimeSlot, $this>
+     */
     public function timeSlots(): HasMany
     {
         return $this->hasMany(TimeSlot::class);

@@ -15,6 +15,8 @@ Laravel API-only 後端作品集專案。以「工程細節深度」為核心：
 | API 文件 | Scribe（靜態產生，`public/docs/`） |
 | 金流 | Stripe Checkout（測試環境金鑰） |
 | 通知 | LINE Notify（透過 Queue Job 非同步發送） |
+| 靜態分析 | Larastan（PHPStan + Laravel 規則），CI 強制執行 |
+| 可觀測性 | Laravel Telescope（本地）、Sentry（正式環境錯誤／慢查詢追蹤） |
 
 ## 快速開始
 
@@ -118,6 +120,26 @@ docker compose exec app php artisan scribe:generate
 - 未登入即可呼叫的端點（`register`/`login`/Stripe webhook）已個別標註 `@unauthenticated`
 - Body 參數自動從各 FormRequest 的驗證規則萃取
 
+## 可觀測性（Telescope / Sentry）
+
+不是寫完就丟著——本地開發用 Telescope 即時看請求/查詢/Job，正式環境用 Sentry 收集例外與慢查詢，兩者都是「加了才會動」，沒設定不會有任何開銷。
+
+- **Laravel Telescope**（`laravel/telescope`，dev-only 依賴）：只在 `APP_ENV=local` 時才會註冊（見 `App\Providers\AppServiceProvider::register()`），用 `class_exists()` 額外防呆，確保正式環境用 `composer install --no-dev` 安裝時完全不會載入到這個類別。開發時開啟 `http://localhost:8000/telescope` 可看到每個請求的 SQL 查詢（含執行時間）、Queue Job、Exception、Cache 命中等
+- 非 local 環境（若真的要開，需自行調整 `TELESCOPE_ENABLED`）存取 Telescope 需要通過 `viewTelescope` gate（`app/Providers/TelescopeServiceProvider.php`），目前設定為僅 `admin` 角色可看
+- **Sentry**（`sentry/sentry-laravel`，一般依賴）：由 `SENTRY_LARAVEL_DSN` 環境變數控制，**留空時完全不啟用**（no-op），`.env.example` 預設空值，不會意外把測試環境的錯誤送到正式的 Sentry 專案
+- 已在 `bootstrap/app.php` 的 `withExceptions()` 接上 `Sentry\Laravel\Integration::handles()`，未攔截的例外會自動回報
+- `config/sentry.php` 預設開啟 SQL 查詢追蹤與慢查詢偵測（`sql_origin_threshold_ms`，預設 100ms），搭配 `SENTRY_TRACES_SAMPLE_RATE` 控制取樣率，避免正式環境流量大時全量追蹤造成效能負擔
+
+## 靜態分析（Larastan / PHPStan）
+
+```bash
+docker compose exec app composer analyse
+```
+
+- 設定於 `phpstan.neon`，等級 5，掃描 `app/`、`database/`、`routes/`
+- CI（`.github/workflows/tests.yml` 的 `static-analysis` job）強制執行，PR 有新的靜態分析錯誤會直接讓 CI 變紅——這是團隊協作場景下「別人看得到你有沒有守規矩」的訊號，不是本機測完就算了
+- 專案內的 Eloquent 關聯全部補上泛型型別標註（例如 `@return BelongsTo<TimeSlot, $this>`），API Resource 類別補上 `@mixin` 指向底層 Model，讓 Larastan 能正確推導 Eloquent 的動態屬性/方法，而不是用 baseline/`@phpstan-ignore` 蓋掉錯誤
+
 ## 測試
 
 ```bash
@@ -137,6 +159,16 @@ docker compose exec app php artisan test
 - **Arch 測試**：`tests/Arch/CodebaseTest.php` 用 Pest 的 architecture testing 確保沒有殘留的 `dd()`/`dump()`、Controller 繼承正確、Model/Service 不誤依賴 HTTP 層
 
 > 完整測試套件已同時在 sqlite（預設）與真實 MySQL 下驗證過，兩邊皆全數通過，確認併發鎖與 JSON 欄位等邏輯不是 sqlite 特有行為造成的假象。
+
+## 壓力測試：用數據證明併發控制真的有效
+
+自動化測試只回答「邏輯對不對」，壓力測試回答「量大的時候還撐不撐得住」。用 [k6](https://k6.io) 對 `POST /api/v1/bookings` 做真正的併發壓測，並且做了「拿掉鎖」與「加鎖」的對照組：
+
+- **300 併發請求搶 20 個名額**：拿掉 `lockForUpdate()` 後連續 3 次測試分別超賣到 42、45、44 筆；加回鎖之後連續 3 次都精準卡在 20 筆
+- **放大到 1000 併發搶 50 個名額**：未加鎖超賣到 73 筆（超賣 46%），加鎖版本精準卡在 50 筆
+- **吞吐量幾乎沒有差**：加鎖前後的 QPS 都落在 140～168 req/s 區間，代表這把鎖換來的正確性幾乎是「免費」的，因為同一列的資料庫寫入本來就無法真正平行處理
+
+完整方法論、原始數據與如何重現，見 **[docs/load-test-report.md](docs/load-test-report.md)**（測試腳本在 `docs/load-test/`）。
 
 ## 資料庫設計
 
@@ -160,5 +192,6 @@ docker compose exec app php artisan test
 | Phase 5 | Pest 測試（並發、冪等性、Rate Limiting、簽章驗證） | ✅ |
 | Phase 6 | Scheduler 每日結算報表、API 文件 | ✅ |
 | Phase 7（選做） | 部署到 EC2 作為 API 子網域 | 暫緩 |
+| 額外強化 | 壓力測試報告、Larastan 靜態分析 + CI、Telescope/Sentry 可觀測性 | ✅ |
 
 Phase 1–6（企劃書必要範圍）皆已完成並通過測試。Phase 7 屬選做的部署步驟，因涉及實際伺服器／網域等環境細節，暫不在此 repo 內處理。

@@ -31,8 +31,14 @@ class GenerateDailyReport extends Command
             ->get()
             ->groupBy('timeSlot.resource.id');
 
-        $rows = $bookings->map(function ($resourceBookings) {
-            $resource = $resourceBookings->first()->timeSlot->resource;
+        $rows = $bookings->map(function (Collection $resourceBookings) {
+            $firstBooking = $resourceBookings->first();
+
+            if (! $firstBooking) {
+                return null;
+            }
+
+            $resource = $firstBooking->timeSlot->resource;
 
             return [
                 'resource_id' => $resource->id,
@@ -44,7 +50,7 @@ class GenerateDailyReport extends Command
                 'payment_failed' => $resourceBookings->where('status', 'payment_failed')->count(),
                 'revenue_paid' => $resourceBookings->where('payment_status', 'paid')->count() * $resource->price,
             ];
-        })->values();
+        })->filter()->values();
 
         $path = $this->writeCsv($date, $rows);
 
@@ -54,9 +60,9 @@ class GenerateDailyReport extends Command
     }
 
     /**
-     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  iterable<array<string, mixed>>  $rows
      */
-    private function writeCsv(Carbon $date, $rows): string
+    private function writeCsv(Carbon $date, iterable $rows): string
     {
         $handle = fopen('php://temp', 'w+');
 
